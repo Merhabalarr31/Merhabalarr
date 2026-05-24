@@ -1,34 +1,33 @@
-require("dotenv").config(); // Çevresel değişkenleri (.env) kullanmak için
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require("discord.js");
+require("dotenv").config();
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes } = require("discord.js");
 const Gamedig = require("gamedig");
 const express = require("express");
 
 // —— Express - Render botu ayakta tutsun ——
 const app = express();
 app.get("/", (_, res) => res.send("RAS Gaming bot aktif!"));
-app.listen(3000, () => console.log("Web sunucusu 3000 portunda dinleniyor."));
+app.listen(3000);
 
 // —— Sunucu ve Bot Ayarları ——
 const CONFIG = {
     ip: "95.173.173.31",
     port: 27015,
     channelId: "1508144741538201804",
-    updateInterval: 30000 // 30 saniye (API banı yememek için önerilen süre)
+    updateInterval: 30000,
+    prefix: "." // Komut ön eki
 };
 
 let messageId = null;
 
 // —— Discord Bot İstemcisi ——
+// MessageContent intent'i buraya eklendi!
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent 
+    ]
 });
-
-// —— Slash Komutları ——
-const commands = [
-    new SlashCommandBuilder()
-        .setName("yenile")
-        .setDescription("Sunucu durum embed mesajını silip yeniden gönderir."),
-];
 
 // —— Sunucu Sorgusu ——
 async function getServerInfo() {
@@ -37,21 +36,11 @@ async function getServerInfo() {
             type: "cs16",
             host: CONFIG.ip,
             port: CONFIG.port,
-            maxAttempts: 3 // Sunucu yanıt vermezse 3 kez dener
+            maxAttempts: 2
         });
-
-        return {
-            online: true,
-            players: `${state.players.length} / ${state.maxplayers}`,
-            map: state.map
-        };
-
+        return { online: true, players: `${state.players.length} / ${state.maxplayers}`, map: state.map };
     } catch (err) {
-        return {
-            online: false,
-            players: "0 / 0",
-            map: "YOK"
-        };
+        return { online: false, players: "0 / 0", map: "YOK" };
     }
 }
 
@@ -62,105 +51,79 @@ function createEmbed(info) {
         .setTitle("🦁 RAS GAMING • VALORANT MOD")
         .setThumbnail("https://i.imgur.com/BkAc3Yn.jpeg")
         .addFields(
-            {
-                name: "📡 Durum",
-                value: info.online
-                    ? "<a:greenloading:1508152313087262982> **Sunucu Aktif**"
-                    : "🔴 **Sunucu Kapalı**",
-                inline: true
-            },
+            { name: "📡 Durum", value: info.online ? "<a:greenloading:1508152313087262982> **Sunucu Aktif**" : "🔴 **Sunucu Kapalı**", inline: true },
             { name: "👥 Oyuncular", value: info.players, inline: true },
             { name: "🗺️ Harita", value: `\`${info.map}\`` },
             { name: "🔗 Bağlan", value: `[Sunucuya Katıl](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
-            { name: "💻 Konsol ile giriş", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
+            { name: "💻 Konsol", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
         )
-        .setFooter({ text: "RAS Gaming • Otomatik Güncelleme" })
+        .setFooter({ text: "RAS Gaming • .yenile yazarak tazeleyebilirsiniz" })
         .setTimestamp();
 }
 
 // —— Embed Güncelleme Döngüsü ——
 async function statusLoop() {
-    try {
-        const channel = await client.channels.fetch(CONFIG.channelId);
+    const channel = await client.channels.fetch(CONFIG.channelId).catch(() => null);
+    if (!channel) return console.error("Kanal bulunamadı!");
 
-        setInterval(async () => {
-            const info = await getServerInfo();
-            const embed = createEmbed(info);
+    setInterval(async () => {
+        const info = await getServerInfo();
+        const embed = createEmbed(info);
 
-            try {
-                if (!messageId) {
-                    // İlk kez gönderiliyorsa veya eski mesaj silinmişse
-                    const msg = await channel.send({ embeds: [embed] });
-                    messageId = msg.id;
-                } else {
-                    // Mevcut mesajı güncelle
-                    const msg = await channel.messages.fetch(messageId);
-                    await msg.edit({ embeds: [embed] });
+        try {
+            if (!messageId) {
+                const msg = await channel.send({ embeds: [embed] });
+                messageId = msg.id;
+            } else {
+                const msg = await channel.messages.fetch(messageId).catch(() => null);
+                if (msg) await msg.edit({ embeds: [embed] });
+                else {
+                    const newMsg = await channel.send({ embeds: [embed] });
+                    messageId = newMsg.id;
                 }
-            } catch (err) {
-                // Mesaj bulunamadı hatası (Biri kanaldaki mesajı silmiş olabilir)
-                // ID'yi sıfırlıyoruz ki bir sonraki döngüde yeniden göndersin
-                console.log("Mesaj güncellenemedi, silinmiş olabilir. Yenisi oluşturulacak.");
-                messageId = null; 
             }
-        }, CONFIG.updateInterval);
-
-    } catch (err) {
-        console.error("Kanal bulunamadı, channelId ayarını kontrol edin:", err);
-    }
+        } catch (err) { console.log("Güncelleme hatası."); }
+    }, CONFIG.updateInterval);
 }
 
 // —— Bot Eventleri ——
-client.once("ready", async () => {
-    console.log("Bot aktif:", client.user.tag);
-
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-    // Slash komut yükleme
-    try {
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands }
-        );
-        console.log("Komutlar yüklendi.");
-    } catch (err) {
-        console.error("Komut yüklenirken hata:", err);
-    }
-
-    // Döngüyü başlat
+client.once("ready", () => {
+    console.log(`${client.user.tag} hazır! Prefix: ${CONFIG.prefix}`);
     statusLoop();
 });
 
-client.on("interactionCreate", async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+// —— Mesaj Kontrolü (.yenile için) ——
+client.on("messageCreate", async (message) => {
+    // Botların mesajlarını ve prefix ile başlamayanları görmezden gel
+    if (message.author.bot || !message.content.startsWith(CONFIG.prefix)) return;
 
-    if (interaction.commandName === "yenile") {
-        // İşlem uzun sürerse timeout yememek için deferReply kullanıyoruz
-        await interaction.deferReply({ ephemeral: true });
+    const command = message.content.slice(CONFIG.prefix.length).trim().toLowerCase();
 
+    if (command === "yenile") {
         try {
-            const channel = await client.channels.fetch(CONFIG.channelId);
             const info = await getServerInfo();
             const embed = createEmbed(info);
+            const channel = message.channel;
 
-            // Eski mesaj varsa sil
+            // Eski mesajı silmeyi dene
             if (messageId) {
-                try {
-                    const msg = await channel.messages.fetch(messageId);
-                    await msg.delete();
-                } catch (e) {
-                    console.log("Eski mesaj zaten silinmiş.");
-                }
+                const oldMsg = await channel.messages.fetch(messageId).catch(() => null);
+                if (oldMsg) await oldMsg.delete().catch(() => null);
             }
 
-            // Yeniden gönder ve ID'yi kaydet
+            // Yeni mesajı gönder
             const newMsg = await channel.send({ embeds: [embed] });
             messageId = newMsg.id;
 
-            await interaction.editReply({ content: "Sunucu durum mesajı başarıyla yenilendi!" });
+            // Komutu yazan kişinin mesajını sil (isteğe bağlı, temizlik için)
+            await message.delete().catch(() => null);
+
+            // Bilgilendirme mesajı gönder ve 3 saniye sonra sil
+            const feedback = await message.reply("✅ Embed başarıyla yenilendi.");
+            setTimeout(() => feedback.delete().catch(() => null), 3000);
+
         } catch (err) {
-            console.error("Yenileme komutunda hata:", err);
-            await interaction.editReply({ content: "Mesaj yenilenirken bir hata oluştu." });
+            console.error("Yenileme hatası:", err);
         }
     }
 });
