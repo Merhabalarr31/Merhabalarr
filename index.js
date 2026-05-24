@@ -2,23 +2,28 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const Gamedig = require('gamedig');
 const express = require('express');
 
-// EXPRESS – Botun 7/24 açık kalmasını sağlar
+// EXPRESS – Render'ın botu kapatmaması için
 const app = express();
-app.get('/', (req, res) => res.send('Bot aktif çalışıyor!'));
-app.listen(3000);
+app.get('/', (req, res) => res.send('Bot çalışıyor!'));
+app.listen(3000, () => console.log("Web server aktif"));
 
-// DISCORD BOT
+// DISCORD CLIENT
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages
+    ]
 });
 
-// Sunucu bilgileri
+// Config
 const CONFIG = {
-    ip: "valo.serahor.com",
+    ip: "95.173.173.31",
     port: 27015,
-    game: "cs16"
+    game: "cs16",
+    channelId: "1415774780266774710"
 };
 
+// Sunucu bilgisi çekme
 async function getServerInfo() {
     try {
         const state = await Gamedig.query({
@@ -29,24 +34,23 @@ async function getServerInfo() {
 
         return {
             online: true,
-            name: state.name,
             map: state.map,
             players: `${state.players.length}/${state.maxplayers}`
         };
-    } catch (error) {
+    } catch (err) {
         return { online: false };
     }
 }
 
+// Bot hazır olduğunda
 client.on("ready", () => {
     console.log(`${client.user.tag} aktif!`);
     statusLoop();
 });
 
-// Embed güncelleme
+// Embed gönderme döngüsü
 async function statusLoop() {
-    const channelId = "KANAL_ID"; // Buraya botun mesaj atacağı kanal ID'sini yaz
-    const channel = await client.channels.fetch(channelId);
+    const channel = await client.channels.fetch(CONFIG.channelId);
 
     setInterval(async () => {
         const info = await getServerInfo();
@@ -63,8 +67,8 @@ async function statusLoop() {
 
         channel.send({ embeds: [embed] });
 
-    }, 15000); // 15 saniyede bir günceller
+    }, 15000);
 }
 
-// Tokeni Render ortam değişkeninden alır
+// TOKEN – Render’dan alıyor
 client.login(process.env.DISCORD_TOKEN);
