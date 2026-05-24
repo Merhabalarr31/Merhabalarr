@@ -20,7 +20,7 @@ const CONFIG = {
     ip: "95.173.173.31",
     port: 27015,
     game: "cs16",
-    channelId: "1415774780266774710"
+    channelId: "1508144741538201804"
 };
 
 // Sunucu bilgisi çekme
