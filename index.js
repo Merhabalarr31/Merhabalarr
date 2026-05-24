@@ -1,77 +1,49 @@
+require("dotenv").config(); // Çevresel değişkenleri (.env) kullanmak için
 const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require("discord.js");
 const Gamedig = require("gamedig");
 const express = require("express");
 
-// Express - Render botu ayakta tutsun
+// —— Express - Render botu ayakta tutsun ——
 const app = express();
 app.get("/", (_, res) => res.send("RAS Gaming bot aktif!"));
-app.listen(3000);
+app.listen(3000, () => console.log("Web sunucusu 3000 portunda dinleniyor."));
 
-const commands = [
-    new SlashCommandBuilder()
-        .setName("yenile")
-        .setDescription("Sunucu durum embed mesajını yeniden gönderir."),
-];
+// —— Sunucu ve Bot Ayarları ——
+const CONFIG = {
+    ip: "95.173.173.31",
+    port: 27015,
+    channelId: "1508144741538201804",
+    updateInterval: 30000 // 30 saniye (API banı yememek için önerilen süre)
+};
 
-// Discord bot
+let messageId = null;
+
+// —— Discord Bot İstemcisi ——
 const client = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
-
-// Sunucu ayarları
-const CONFIG = {
-    ip: "95.173.173.31",
-    port: 27015
-};
-
-// Kanal & mesaj ID
-let channelId = "1508144741538201804";
-let messageId = null;
 
 // —— Slash Komutları ——
 const commands = [
     new SlashCommandBuilder()
         .setName("yenile")
-        .setDescription("Sunucu durum embed mesajını yeniden gönderir."),
+        .setDescription("Sunucu durum embed mesajını silip yeniden gönderir."),
 ];
-
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-client.on("ready", async () => {
-    console.log("Bot aktif:", client.user.tag);
-
-    // Slash komut yükleme
-    try {
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands }
-        );
-        console.log("Komutlar yüklendi.");
-    } catch (err) {
-        console.error("Komut yüklenirken hata:", err);
-    }
-
-    statusLoop();
-});
-
-await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: commands }
-);
 
 // —— Sunucu Sorgusu ——
 async function getServerInfo() {
     try {
-        let s = await Gamedig.query({
+        const state = await Gamedig.query({
             type: "cs16",
             host: CONFIG.ip,
-            port: CONFIG.port
+            port: CONFIG.port,
+            maxAttempts: 3 // Sunucu yanıt vermezse 3 kez dener
         });
 
         return {
             online: true,
-            players: `${s.players.length} / ${s.maxplayers}`,
-            map: s.map
+            players: `${state.players.length} / ${state.maxplayers}`,
+            map: state.map
         };
 
     } catch (err) {
@@ -99,8 +71,8 @@ function createEmbed(info) {
             },
             { name: "👥 Oyuncular", value: info.players, inline: true },
             { name: "🗺️ Harita", value: `\`${info.map}\`` },
-            { name: "🔗 Bağlan", value: "[Sunucuya Katıl](steam://connect/95.173.173.31:27015)" },
-            { name: "💻 Konsol ile giriş", value: "`connect 95.173.173.31:27015`" }
+            { name: "🔗 Bağlan", value: `[Sunucuya Katıl](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
+            { name: "💻 Konsol ile giriş", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
         )
         .setFooter({ text: "RAS Gaming • Otomatik Güncelleme" })
         .setTimestamp();
@@ -108,48 +80,88 @@ function createEmbed(info) {
 
 // —— Embed Güncelleme Döngüsü ——
 async function statusLoop() {
-    const channel = await client.channels.fetch(channelId);
+    try {
+        const channel = await client.channels.fetch(CONFIG.channelId);
 
-    setInterval(async () => {
-        const info = await getServerInfo();
-        const embed = createEmbed(info);
+        setInterval(async () => {
+            const info = await getServerInfo();
+            const embed = createEmbed(info);
 
-        try {
-            if (!messageId) {
-                let msg = await channel.send({ embeds: [embed] });
-                messageId = msg.id;
-            } else {
-                let msg = await channel.messages.fetch(messageId);
-                msg.edit({ embeds: [embed] });
+            try {
+                if (!messageId) {
+                    // İlk kez gönderiliyorsa veya eski mesaj silinmişse
+                    const msg = await channel.send({ embeds: [embed] });
+                    messageId = msg.id;
+                } else {
+                    // Mevcut mesajı güncelle
+                    const msg = await channel.messages.fetch(messageId);
+                    await msg.edit({ embeds: [embed] });
+                }
+            } catch (err) {
+                // Mesaj bulunamadı hatası (Biri kanaldaki mesajı silmiş olabilir)
+                // ID'yi sıfırlıyoruz ki bir sonraki döngüde yeniden göndersin
+                console.log("Mesaj güncellenemedi, silinmiş olabilir. Yenisi oluşturulacak.");
+                messageId = null; 
             }
-        } catch (err) {
-            console.log("Mesaj güncellenemedi:", err);
-        }
+        }, CONFIG.updateInterval);
 
-    }, 10000);
+    } catch (err) {
+        console.error("Kanal bulunamadı, channelId ayarını kontrol edin:", err);
+    }
 }
+
+// —— Bot Eventleri ——
+client.once("ready", async () => {
+    console.log("Bot aktif:", client.user.tag);
+
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    // Slash komut yükleme
+    try {
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
+        console.log("Komutlar yüklendi.");
+    } catch (err) {
+        console.error("Komut yüklenirken hata:", err);
+    }
+
+    // Döngüyü başlat
+    statusLoop();
+});
 
 client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === "yenile") {
-        const channel = await client.channels.fetch(channelId);
-        const info = await getServerInfo();
-        const embed = createEmbed(info);
+        // İşlem uzun sürerse timeout yememek için deferReply kullanıyoruz
+        await interaction.deferReply({ ephemeral: true });
 
-        // Eski mesajı sil
-        if (messageId) {
-            try {
-                let msg = await channel.messages.fetch(messageId);
-                await msg.delete();
-            } catch (e) {}
+        try {
+            const channel = await client.channels.fetch(CONFIG.channelId);
+            const info = await getServerInfo();
+            const embed = createEmbed(info);
+
+            // Eski mesaj varsa sil
+            if (messageId) {
+                try {
+                    const msg = await channel.messages.fetch(messageId);
+                    await msg.delete();
+                } catch (e) {
+                    console.log("Eski mesaj zaten silinmiş.");
+                }
+            }
+
+            // Yeniden gönder ve ID'yi kaydet
+            const newMsg = await channel.send({ embeds: [embed] });
+            messageId = newMsg.id;
+
+            await interaction.editReply({ content: "Sunucu durum mesajı başarıyla yenilendi!" });
+        } catch (err) {
+            console.error("Yenileme komutunda hata:", err);
+            await interaction.editReply({ content: "Mesaj yenilenirken bir hata oluştu." });
         }
-
-        // Yeniden gönder
-        let newMsg = await channel.send({ embeds: [embed] });
-        messageId = newMsg.id;
-
-        await interaction.reply({ content: "Embed yenilendi!", ephemeral: true });
     }
 });
 
