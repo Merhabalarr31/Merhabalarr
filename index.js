@@ -46,7 +46,7 @@ function createEmbed() {
             { name: "🔗 Adres", value: `\`${CONFIG.dns || CONFIG.ip}\``, inline: true },
             { name: "🗺️ Harita", value: `\`${serverData.map}\``, inline: true },
             { name: "👥 Oyuncular", value: `\`${serverData.players}\``, inline: true },
-            { name: "🔗 Bağlan", value: `[Sunucuya Tıkla](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
+            { name: "🔗 Bağlan", value: `[Sunucuya Tıklayarak Katıl](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
             { name: "💻 Konsol ile girmek için kopyala:", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
         )
         .setImage(`https://gametracker.com/server_info/${CONFIG.ip}:${CONFIG.port}/b_560_95_1.png`)
