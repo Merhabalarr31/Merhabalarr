@@ -2,28 +2,27 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const Gamedig = require("gamedig");
 const express = require("express");
 
-// 7/24 aktif tutma
 const app = express();
-app.get("/", (req, res) => res.send("RAS Gaming bot aktif!"));
+app.get("/", (_, res) => res.send("RAS Gaming bot aktif!"));
 app.listen(3000);
 
-// Discord bot
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    intents: [GatewayIntentBits.Guilds]
 });
 
-// Sunucu bilgileri
+// Sunucu
 const CONFIG = {
     ip: "95.173.173.31",
     port: 27015,
 };
 
+// Embed mesaj ID
 let messageId = null;
+let channelId = "1508144741538201804"; // KANAL ID
 
-// Sunucu sorgusu
 async function getServerInfo() {
     try {
-        const data = await Gamedig.query({
+        const s = await Gamedig.query({
             type: "cs16",
             host: CONFIG.ip,
             port: CONFIG.port
@@ -31,23 +30,26 @@ async function getServerInfo() {
 
         return {
             online: true,
-            map: data.map,
-            players: `${data.players.length} / ${data.maxplayers}`
+            players: `${s.players.length} / ${s.maxplayers}`,
+            map: s.map
         };
 
-    } catch (err) {
-        return { online: false };
+    } catch {
+        return {
+            online: false,
+            players: "0 / 0",
+            map: "YOK"
+        };
     }
 }
 
-client.on("ready", () => {
-    console.log(`Bot aktif: ${client.user.tag}`);
+client.on("ready", async () => {
+    console.log("Bot aktif:", client.user.tag);
     statusLoop();
 });
 
-// Embed güncelleme döngüsü
 async function statusLoop() {
-    const channel = await client.channels.fetch("1508144741538201804"); // BURAYI DÜZENLE!!
+    const channel = await client.channels.fetch(channelId);
 
     setInterval(async () => {
         const info = await getServerInfo();
@@ -55,45 +57,32 @@ async function statusLoop() {
         const embed = new EmbedBuilder()
             .setColor(info.online ? 0x00ff00 : 0xff0000)
             .setTitle("🦁 RAS GAMING • VALORANT MOD")
-            .setThumbnail("https://i.imgur.com/99fd39a3.png") // LOGO EKLENDİ
+            .setThumbnail("https://i.imgur.com/BkAc3Yn.jpeg") // LOGO
             .addFields(
-                {
-                    name: "Durum",
-                    value: info.online ? "🟢 **Sunucu Aktif**" : "🔴 **Sunucu Kapalı**",
-                    inline: true
-                },
-                {
-                    name: "Oyuncular",
-                    value: info.online ? info.players : "0 / 0",
-                    inline: true
-                },
-                {
-                    name: "Harita",
-                    value: info.online ? `\`${info.map}\`` : "YOK",
-                    inline: false
-                },
-                {
-                    name: "Bağlan",
-                    value: "[Sunucuya Katıl](steam://connect/95.173.173.31:27015)",
-                    inline: false
-                },
-                {
-                    name: "Konsol ile giriş",
-                    value: "`connect 95.173.173.31:27015`"
-                }
+                { name: "Durum", value: info.online ? "🟢 Sunucu Aktif" : "🔴 Sunucu Kapalı", inline: true },
+                { name: "Oyuncular", value: info.players, inline: true },
+                { name: "Harita", value: info.map, inline: false },
+                { name: "Bağlan", value: "[Sunucuya Katıl](steam://connect/95.173.173.31:27015)" },
+                { name: "Konsol ile Giriş", value: "`connect 95.173.173.31:27015`" }
             )
             .setFooter({ text: "RAS Gaming • Otomatik Güncelleme" })
             .setTimestamp();
 
-        if (!messageId) {
-            const msg = await channel.send({ embeds: [embed] });
-            messageId = msg.id;
-        } else {
-            const msg = await channel.messages.fetch(messageId);
-            msg.edit({ embeds: [embed] });
+        try {
+            if (!messageId) {
+                // İlk mesajı gönder
+                let msg = await channel.send({ embeds: [embed] });
+                messageId = msg.id;
+            } else {
+                // Var olan mesajı güncelle
+                let msg = await channel.messages.fetch(messageId);
+                await msg.edit({ embeds: [embed] });
+            }
+        } catch (err) {
+            console.error("Mesaj güncellenemedi:", err);
         }
 
-    }, 15000);
+    }, 10000);
 }
 
 client.login(process.env.DISCORD_TOKEN);
