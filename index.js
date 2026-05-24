@@ -7,6 +7,12 @@ const app = express();
 app.get("/", (_, res) => res.send("RAS Gaming bot aktif!"));
 app.listen(3000);
 
+const commands = [
+    new SlashCommandBuilder()
+        .setName("yenile")
+        .setDescription("Sunucu durum embed mesajını yeniden gönderir."),
+];
+
 // Discord bot
 const client = new Client({
     intents: [GatewayIntentBits.Guilds]
@@ -47,6 +53,11 @@ client.on("ready", async () => {
 
     statusLoop();
 });
+
+await rest.put(
+    Routes.applicationCommands(client.user.id),
+    { body: commands }
+);
 
 // —— Sunucu Sorgusu ——
 async function getServerInfo() {
@@ -118,7 +129,6 @@ async function statusLoop() {
     }, 10000);
 }
 
-// —— Slash Komut Çalıştırma ——
 client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -127,13 +137,15 @@ client.on("interactionCreate", async interaction => {
         const info = await getServerInfo();
         const embed = createEmbed(info);
 
+        // Eski mesajı sil
         if (messageId) {
             try {
                 let msg = await channel.messages.fetch(messageId);
-                await msg.delete(); // Eskiyi sil
-            } catch {}
+                await msg.delete();
+            } catch (e) {}
         }
 
+        // Yeniden gönder
         let newMsg = await channel.send({ embeds: [embed] });
         messageId = newMsg.id;
 
