@@ -53,24 +53,39 @@ function createEmbed() {
         .setTimestamp();
 }
 
+// ... Diğer kodlar aynı kalıyor, sadece updateDiscordEmbed fonksiyonunu bununla değiştir:
+
 async function updateDiscordEmbed() {
     try {
         const channel = await client.channels.fetch(CONFIG.channelId).catch(() => null);
         if (!channel) return;
+        
         const embed = createEmbed();
 
+        // Eğer messageId kayıtlı değilse, kanaldaki son 5 mesaja bak, 
+        // kendi attığın embed mesajını bul ve messageId olarak ata (Bot resetlense bile eskiyi bulur)
         if (!messageId) {
-            const msg = await channel.send({ embeds: [embed] });
-            messageId = msg.id;
-        } else {
+            const messages = await channel.messages.fetch({ limit: 5 });
+            const botMsg = messages.find(m => m.author.id === client.user.id && m.embeds.length > 0);
+            if (botMsg) messageId = botMsg.id;
+        }
+
+        if (messageId) {
+            // Mesaj varsa düzenle
             const msg = await channel.messages.fetch(messageId).catch(() => null);
-            if (msg) await msg.edit({ embeds: [embed] });
-            else {
+            if (msg) {
+                await msg.edit({ embeds: [embed] });
+            } else {
+                // Mesaj artık yoksa (silinmişse) yenisini at
                 const newMsg = await channel.send({ embeds: [embed] });
                 messageId = newMsg.id;
             }
+        } else {
+            // Hiç mesaj yoksa yenisini gönder
+            const newMsg = await channel.send({ embeds: [embed] });
+            messageId = newMsg.id;
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Güncelleme hatası:", err); }
 }
 
 client.once("ready", async () => {
