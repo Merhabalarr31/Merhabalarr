@@ -8,7 +8,7 @@ const app = express();
 const CONFIG = {
     ip: "95.173.173.31",
     port: 27015,
-    dns: "valo.rasgaming.com", // Kendi domainin varsa buraya yaz, yoksa IP'yi yaz
+    dns: "valo.rasgaming.com",
     channelId: "1508144741538201804",
     prefix: "."
 };
@@ -44,16 +44,15 @@ function createEmbed() {
         .addFields(
             { name: "📡 Durum", value: serverData.online ? "<a:greenloading:1508152313087262982> **Aktif**" : "🔴 **Veri Bekleniyor...**", inline: true },
             { name: "🔗 Adres", value: `\`${CONFIG.dns || CONFIG.ip}\``, inline: true },
-            { name: "🗺️ Harita", value: `\`${serverData.map}\`` },
-            { name: "👥 Oyuncular", value: serverData.players },
-            { name: "🔗 Bağlanmak için Tıkla", value: `[Sunucuya Katıl](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
+            { name: "🗺️ Harita", value: `\`${serverData.map}\``, inline: true },
+            { name: "👥 Oyuncular", value: `\`${serverData.players}\``, inline: true },
+            { name: "🔗 Bağlan", value: `[Sunucuya Tıkla](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
             { name: "💻 Konsol ile girmek için kopyala:", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
         )
-        .setFooter({ text: "RAS Gaming • Otomatik Güncelleme" })
+        .setImage(`https://gametracker.com/server_info/${CONFIG.ip}:${CONFIG.port}/b_560_95_1.png`)
+        .setFooter({ text: "RAS Gaming • Oyun İçi Otomatik Güncelleme" })
         .setTimestamp();
 }
-
-// ... Diğer kodlar aynı kalıyor, sadece updateDiscordEmbed fonksiyonunu bununla değiştir:
 
 async function updateDiscordEmbed() {
     try {
@@ -62,8 +61,6 @@ async function updateDiscordEmbed() {
         
         const embed = createEmbed();
 
-        // Eğer messageId kayıtlı değilse, kanaldaki son 5 mesaja bak, 
-        // kendi attığın embed mesajını bul ve messageId olarak ata (Bot resetlense bile eskiyi bulur)
         if (!messageId) {
             const messages = await channel.messages.fetch({ limit: 5 });
             const botMsg = messages.find(m => m.author.id === client.user.id && m.embeds.length > 0);
@@ -71,17 +68,13 @@ async function updateDiscordEmbed() {
         }
 
         if (messageId) {
-            // Mesaj varsa düzenle
             const msg = await channel.messages.fetch(messageId).catch(() => null);
-            if (msg) {
-                await msg.edit({ embeds: [embed] });
-            } else {
-                // Mesaj artık yoksa (silinmişse) yenisini at
+            if (msg) await msg.edit({ embeds: [embed] });
+            else {
                 const newMsg = await channel.send({ embeds: [embed] });
                 messageId = newMsg.id;
             }
         } else {
-            // Hiç mesaj yoksa yenisini gönder
             const newMsg = await channel.send({ embeds: [embed] });
             messageId = newMsg.id;
         }
@@ -90,7 +83,6 @@ async function updateDiscordEmbed() {
 
 client.once("ready", async () => {
     console.log(`Bot aktif: ${client.user.tag}`);
-    // Bot açıldığında ilk mesajı oluştur
     await updateDiscordEmbed();
 });
 
@@ -98,11 +90,12 @@ client.on("messageCreate", async (message) => {
     if (message.author.bot || !message.content.startsWith(CONFIG.prefix)) return;
     if (message.content.slice(CONFIG.prefix.length).trim().toLowerCase() === "yenile") {
         await message.delete().catch(() => null);
+        // .yenile komutu mevcut mesajı silip yeniden oluşturur (temizlemek için)
         if (messageId) {
              const oldMsg = await message.channel.messages.fetch(messageId).catch(() => null);
              if (oldMsg) await oldMsg.delete().catch(() => null);
         }
-        messageId = null; // Sıfırla ki yeniden oluştursun
+        messageId = null;
         await updateDiscordEmbed();
     }
 });
