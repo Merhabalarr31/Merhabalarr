@@ -38,12 +38,35 @@ function createEmbed() {
         .setTitle("🦁 CS1.6 VALORANT MOD\n#RASGAMING")
         .setThumbnail("https://i.imgur.com/BkAc3Yn.jpeg")
         .addFields(
-            { name: "📡 Durum", value: serverData.online ? "<a:greenloading:1508152313087262982> **Aktif**" : "🔴 **Veri Bekleniyor...**", inline: true },
-            { name: "🔗 Adres", value: `\`${CONFIG.dns || CONFIG.ip}\``, inline: true },
-            { name: "🗺️ Harita", value: `\`${serverData.map}\``, inline: true },
-            { name: "👥 Oyuncular", value: `\`${serverData.players}\``, inline: true },
-            { name: "🔗 Bağlan", value: `[Sunucuya Tıklayarak Katıl](steam://connect/${CONFIG.ip}:${CONFIG.port})` },
-            { name: "💻 Konsol:", value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` }
+            { 
+                name: "📡 Durum", 
+                value: serverData.online 
+                    ? "<a:greenloading:1508152313087262982> **Aktif**" 
+                    : "🔴 **Veri Bekleniyor...**", 
+                inline: true 
+            },
+            
+            { 
+                name: "🗺️ Harita", 
+                value: `\`${serverData.map}\``, 
+                inline: true 
+            },
+            
+            { 
+                name: "👥 Oyuncular", 
+                value: `\`${serverData.players}\``, 
+                inline: true 
+            },
+            
+            { 
+                name: "🔗 Bağlan", 
+                value: `[🔗 Bağlan](steam://connect/${CONFIG.ip}:${CONFIG.port})` 
+            },
+            
+            { 
+                name: "💻 Konsol:", 
+                value: `\`connect ${CONFIG.ip}:${CONFIG.port}\`` 
+            }
         )
         .setImage(`https://gametracker.com/server_info/${CONFIG.ip}:${CONFIG.port}/b_560_95_1.png`)
         .setFooter({ text: "RAS Gaming • Otomatik Güncelleme" })
